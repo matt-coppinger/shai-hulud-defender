@@ -1,0 +1,19 @@
+# OS junk
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*~
+
+# Quarantine output (in case anyone tests locally)
+quarantine/
+*.log
+
+# Local secrets
+.env
+*.key
+*.pem
