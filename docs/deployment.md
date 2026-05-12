@@ -98,35 +98,11 @@ ls -lO /Users/<testuser>/.claude/setup.mjs   # should show 'uchg'
 
 Assign to developer Smart Group.
 
-### 2.2 Patch the sensor for tripwire awareness
-
-The sensor as-shipped will flag tripwire files placed by the prevent script. Patch the sensor's payload check to skip files containing the string `Workspace ONE tripwire`.
-
-In `Test-DroppedPayload` (Windows) and `check_dropped_payloads` (macOS), add a content check before flagging:
-
-**Windows (around line 36):**
-```powershell
-if (Test-Path -LiteralPath $p -PathType Leaf) {
-    $firstLine = Get-Content -LiteralPath $p -First 1 -ErrorAction SilentlyContinue
-    if ($firstLine -match 'Workspace ONE tripwire') { continue }
-    $findings.Add("PAYLOAD:$Scope/$f")
-    $script:status = 'DETECTED'
-}
-```
-
-**macOS (in `check_dropped_payloads`):**
-```bash
-if [ -f "$dir/$f" ]; then
-    if head -1 "$dir/$f" 2>/dev/null | grep -q 'Workspace ONE tripwire'; then
-        continue
-    fi
-    add_finding "DETECTED" "PAYLOAD:${scope}/${f}"
-fi
-```
-
-### 2.3 Verify
+### 2.2 Verify
 
 Wait for one sensor cycle, then check Device Details → Sensors. You should see `STATUS:CLEAN|scanned:N` where N is non-zero on developer machines with repos.
+
+Note: The sensors are tripwire-aware. They skip files whose first line contains `Workspace ONE tripwire`, so the tripwires placed by the prevent script do not cause false `STATUS:DETECTED` reports.
 
 ## Phase 3 — Intelligence alerting
 

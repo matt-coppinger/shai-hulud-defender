@@ -32,6 +32,10 @@ function Test-DroppedPayload {
     foreach ($f in $payloadFiles) {
         $p = Join-Path $Dir $f
         if (Test-Path -LiteralPath $p -PathType Leaf) {
+            # Skip tripwire files placed by the prevent script.
+            # Tripwires contain "Workspace ONE tripwire" in their first line.
+            $firstLine = Get-Content -LiteralPath $p -TotalCount 1 -ErrorAction SilentlyContinue
+            if ($firstLine -match 'Workspace ONE tripwire') { continue }
             $findings.Add("PAYLOAD:$Scope/$f")
             $script:status = 'DETECTED'
         }

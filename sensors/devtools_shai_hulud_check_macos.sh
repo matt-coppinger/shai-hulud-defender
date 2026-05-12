@@ -34,6 +34,11 @@ check_dropped_payloads() {
     [ -d "$dir" ] || return
     for f in $PAYLOAD_FILES; do
         if [ -f "$dir/$f" ]; then
+            # Skip tripwire files placed by the prevent script.
+            # Tripwires contain "Workspace ONE tripwire" in their first line.
+            if head -1 "$dir/$f" 2>/dev/null | grep -q 'Workspace ONE tripwire'; then
+                continue
+            fi
             add_finding "DETECTED" "PAYLOAD:${scope}/${f}"
         fi
     done
