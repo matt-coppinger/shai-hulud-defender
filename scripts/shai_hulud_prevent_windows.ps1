@@ -102,7 +102,7 @@ Write-Log "Updated hosts file with $($blockDomains.Count + 1) block entries"
 #    payload. The dropper overwrite will fail (or at minimum, the file's
 #    ACL preserves an audit trail).
 # ---------------------------------------------------------------------------
-$tripwireFilenames = @('setup.mjs','router_runtime.js','router_init.js','execution.js','tanstack_runner.js')
+$tripwireFilenames = @('setup.mjs','setup.sh','router_runtime.js','router_init.js','execution.js','tanstack_runner.js','opensearch_init.js')
 $tripwireSubdirs = @('.claude','.vscode')
 
 # Iterate every user profile (excluding system profiles)

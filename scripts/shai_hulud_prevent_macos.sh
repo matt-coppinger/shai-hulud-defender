@@ -110,7 +110,7 @@ log "Updated /etc/hosts with C2 blocks; flushed DNS cache"
 # ---------------------------------------------------------------------------
 # 3. Tripwire files at known persistence paths in each user's home
 # ---------------------------------------------------------------------------
-TRIPWIRE_FILES="setup.mjs router_runtime.js router_init.js execution.js tanstack_runner.js"
+TRIPWIRE_FILES="setup.mjs setup.sh router_runtime.js router_init.js execution.js tanstack_runner.js opensearch_init.js"
 TRIPWIRE_SUBDIRS=".claude .vscode"
 
 # Iterate real user accounts (UID >= 500, has shell, has home under /Users)

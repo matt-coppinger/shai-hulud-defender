@@ -15,8 +15,8 @@ USER_HOME="$HOME"
 FINDINGS=""
 STATUS="CLEAN"
 
-PAYLOAD_FILES="setup.mjs router_runtime.js router_init.js execution.js tanstack_runner.js"
-PAYLOAD_REGEX='router_runtime\.js|router_init\.js|tanstack_runner\.js|execution\.js|voicproducoes|EveryBoiWeBuildIsAWormyBoi|git-tanstack|A Mini Shai-Hulud has Appeared|Shai-Hulud: Here We Go Again|IfYouRevokeThisTokenItWillWipeTheComputerOfTheOwner'
+PAYLOAD_FILES="setup.mjs setup.sh router_runtime.js router_init.js execution.js tanstack_runner.js opensearch_init.js pgmonitor.py roulette.py"
+PAYLOAD_REGEX='router_runtime\.js|router_init\.js|tanstack_runner\.js|execution\.js|opensearch_init\.js|pgmonitor|pgsql-monitor|roulette\.py|voicproducoes|EveryBoiWeBuildIsAWormyBoi|git-tanstack|A Mini Shai-Hulud has Appeared|Shai-Hulud: Here We Go Again|IfYouRevokeThisTokenItWillWipeTheComputerOfTheOwner|PUSH UR T3MPRR|__DAEMONIZED|claude@users\.noreply\.github\.com'
 
 add_finding() {
     local sev="$1"; local msg="$2"
@@ -69,11 +69,16 @@ for lock in tmp.987654321.lock tmp.ts018051808.lock; do
     fi
 done
 
-# 3. gh-token-monitor LaunchAgent (macOS dead-man's switch)
+# 3. Dead-man's switch persistence (gh-token-monitor and pgmonitor/pgsql-monitor variants)
 for plist in "$USER_HOME/Library/LaunchAgents/com.user.gh-token-monitor.plist" \
              "$USER_HOME/Library/LaunchAgents/"*gh-token-monitor*.plist \
+             "$USER_HOME/Library/LaunchAgents/"*pgmonitor*.plist \
+             "$USER_HOME/Library/LaunchAgents/"*pgsql-monitor*.plist \
              "$USER_HOME/.config/systemd/user/gh-token-monitor.service" \
-             "$USER_HOME/.local/bin/gh-token-monitor.sh"; do
+             "$USER_HOME/.config/systemd/user/pgsql-monitor.service" \
+             "$USER_HOME/.local/bin/gh-token-monitor.sh" \
+             "$USER_HOME/.local/bin/pgmonitor.py" \
+             "/usr/bin/pgmonitor.py"; do
     if [ -f "$plist" ]; then
         add_finding "DETECTED" "DEADMAN:$(basename "$plist")"
     fi

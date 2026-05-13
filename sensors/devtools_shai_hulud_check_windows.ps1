@@ -9,14 +9,15 @@
 # DETECTED = high-confidence IOC (dropped payload file on disk, known service)
 # SUSPECT  = config file references known-bad strings (needs human review)
 #
-# IOCs covered (sources: Mend, Endor, Wiz, Socket, Snyk, Semgrep, May 2026):
-#   ~/.claude/setup.mjs, ~/.claude/router_runtime.js, ~/.claude/router_init.js,
-#   ~/.claude/execution.js, ~/.claude/tanstack_runner.js
-#   ~/.vscode/setup.mjs
-#   Per-repo: <repo>/.claude/{settings.json,setup.mjs,router_runtime.js,router_init.js}
-#   Per-repo: <repo>/.vscode/{tasks.json,setup.mjs}
+# IOCs covered (sources: Mend, Endor, Wiz, Socket, Snyk, Semgrep, Upwind, Aikido — May 2026):
+#   ~/.claude/setup.mjs, ~/.claude/setup.sh, ~/.claude/router_runtime.js, ~/.claude/router_init.js,
+#   ~/.claude/execution.js, ~/.claude/tanstack_runner.js, ~/.claude/opensearch_init.js,
+#   ~/.claude/pgmonitor.py, ~/.claude/roulette.py
+#   ~/.vscode/setup.mjs (and the same payload set as above)
+#   Per-repo: <repo>/.claude/{settings.json,setup.mjs,router_runtime.js,router_init.js,...}
+#   Per-repo: <repo>/.vscode/{tasks.json,setup.mjs,...}
 #   Lock files: %TEMP%\tmp.987654321.lock, tmp.ts018051808.lock
-#   Scheduled task / service named gh-token-monitor (Win equivalent of LaunchAgent)
+#   Scheduled task / service matching gh-token-monitor | pgmonitor | pgsql-monitor
 
 $ErrorActionPreference = 'SilentlyContinue'
 $findings = [System.Collections.Generic.List[string]]::new()
@@ -24,8 +25,8 @@ $status = 'CLEAN'
 
 # Tight regex: requires malware-specific tokens, not just generic Claude/VSCode keywords.
 # 'SessionStart' alone is legitimate; 'SessionStart' + 'setup.mjs' is not.
-$payloadFiles = @('setup.mjs','router_runtime.js','router_init.js','execution.js','tanstack_runner.js')
-$payloadRegex = '(router_runtime\.js|router_init\.js|tanstack_runner\.js|execution\.js|voicproducoes|EveryBoiWeBuildIsAWormyBoi|git-tanstack|A Mini Shai-Hulud has Appeared|Shai-Hulud: Here We Go Again|IfYouRevokeThisTokenItWillWipeTheComputerOfTheOwner)'
+$payloadFiles = @('setup.mjs','setup.sh','router_runtime.js','router_init.js','execution.js','tanstack_runner.js','opensearch_init.js','pgmonitor.py','roulette.py')
+$payloadRegex = '(router_runtime\.js|router_init\.js|tanstack_runner\.js|execution\.js|opensearch_init\.js|pgmonitor|pgsql-monitor|roulette\.py|voicproducoes|EveryBoiWeBuildIsAWormyBoi|git-tanstack|A Mini Shai-Hulud has Appeared|Shai-Hulud: Here We Go Again|IfYouRevokeThisTokenItWillWipeTheComputerOfTheOwner|PUSH UR T3MPRR|__DAEMONIZED|claude@users\.noreply\.github\.com)'
 
 function Test-DroppedPayload {
     param([string]$Dir, [string]$Scope)
@@ -71,11 +72,12 @@ foreach ($lock in @('tmp.987654321.lock','tmp.ts018051808.lock')) {
     }
 }
 
-# 3. gh-token-monitor as scheduled task or service
-$ghMon = Get-ScheduledTask | Where-Object { $_.TaskName -match 'gh-token-monitor' }
-if ($ghMon) { $findings.Add("SCHEDTASK:gh-token-monitor"); $status = 'DETECTED' }
-$ghSvc = Get-Service | Where-Object { $_.Name -match 'gh-token-monitor' }
-if ($ghSvc) { $findings.Add("SERVICE:gh-token-monitor"); $status = 'DETECTED' }
+# 3. Dead-man's switch as scheduled task or service (gh-token-monitor + pgmonitor/pgsql-monitor variants)
+$deadmanPattern = 'gh-token-monitor|pgmonitor|pgsql-monitor'
+$schedTasks = Get-ScheduledTask | Where-Object { $_.TaskName -match $deadmanPattern }
+foreach ($t in $schedTasks) { $findings.Add("SCHEDTASK:$($t.TaskName)"); $status = 'DETECTED' }
+$svcs = Get-Service | Where-Object { $_.Name -match $deadmanPattern }
+foreach ($s in $svcs) { $findings.Add("SERVICE:$($s.Name)"); $status = 'DETECTED' }
 
 # 4. Project scan: walk common dev roots, depth-limited, with hard cap on dirs visited.
 #    We look for repos (anything containing a .git folder OR a package.json) within the

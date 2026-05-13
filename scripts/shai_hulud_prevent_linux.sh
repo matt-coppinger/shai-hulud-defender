@@ -100,7 +100,7 @@ log "Updated /etc/hosts; flushed DNS cache"
 # 3. Tripwire files at persistence paths for every real user
 #    UID >= 1000 on most distros; some distros (RHEL) use 500. We accept >= 500.
 # ---------------------------------------------------------------------------
-TRIPWIRE_FILES="setup.mjs router_runtime.js router_init.js execution.js tanstack_runner.js"
+TRIPWIRE_FILES="setup.mjs setup.sh router_runtime.js router_init.js execution.js tanstack_runner.js opensearch_init.js"
 TRIPWIRE_SUBDIRS=".claude .vscode"
 
 # chattr availability check (not present on all minimal containers)
