@@ -4,7 +4,7 @@ Workspace ONE UEM sensors and scripts to detect, prevent, and remediate the **Mi
 
 > **Status:** Defensive controls only. This repo does not contain offensive tooling or malware samples.
 > **Maintained for:** Workspace ONE UEM (Omnissa) customers managing developer endpoints.
-> **Last updated:** May 2026 — IOCs current as of the May 11–12 TanStack wave.
+> **Last updated:** 2026-05-13 — IOCs current through the May 11–13 TanStack wave (CVE-2026-45321, CVSS 9.6).
 
 ---
 
@@ -51,7 +51,7 @@ What it does on a developer machine:
 3. **Credential sweep**: GitHub tokens (`ghp_`, `gho_`, `ghs_`), npm tokens, AWS / GCP / Azure credentials, Vault tokens, Kubernetes service accounts
 4. **Persistence**: SessionStart hooks in `.claude/settings.json` and `folderOpen` triggers in `.vscode/tasks.json`. Payload binaries dropped into `.claude/` and `.vscode/`
 5. **Exfil**: Four redundant channels — HTTPS to `git-tanstack.com`, Session/Oxen E2E network (`*.getsession.org`), GitHub commit-search dead-drop, and attacker-controlled public GitHub repos
-6. **Dead-man's switch**: A `gh-token-monitor` LaunchAgent (macOS) or systemd user service (Linux) polls `api.github.com/user` every 60 seconds. On HTTP 40x (token revoked) it attempts `rm -rf ~/`
+6. **Dead-man's switch**: A `gh-token-monitor` LaunchAgent (macOS) or systemd user service (Linux) — or a `pgmonitor.py` / `pgsql-monitor.service` variant in newer drops — polls `api.github.com/user` every 60 seconds. On HTTP 40x (token revoked) it attempts `rm -rf ~/`
 
 > ⚠️ **Critical:** Before rotating any potentially-compromised tokens, **disable the dead-man's switch first**. The remediate scripts in this repo do this automatically as Step 1.
 
@@ -142,15 +142,15 @@ The trigger is: *Sensor `devtools_shai_hulud_check` returns a value containing `
 
 2. **Block known C2 / payload-fetch endpoints in the hosts file:** `git-tanstack.com`, `*.getsession.org`, `api.cloud-aws.adc-e.uk`, `api.masscan.cloud`, and `83.142.209.194` (the PyPI variant's hardcoded IP). Partial coverage only — the Session/Oxen channel is E2E-encrypted with no central C2.
 
-3. **Drop read-only tripwire files** at `~/.claude/{setup.mjs,router_runtime.js,router_init.js,execution.js,tanstack_runner.js}` and `~/.vscode/` for every user profile. Even if `ignore-scripts` is bypassed somehow, the dropper's `writeFileSync` will fail because the file is immutable (`chflags uchg` on macOS, deny-write ACL on Windows). Belt-and-braces.
+3. **Drop read-only tripwire files** at `~/.claude/{setup.mjs,setup.sh,router_runtime.js,router_init.js,execution.js,tanstack_runner.js,opensearch_init.js}` and `~/.vscode/` for every user profile. Even if `ignore-scripts` is bypassed somehow, the dropper's `writeFileSync` will fail because the file is immutable (`chflags uchg` on macOS, `chattr +i` on Linux, deny-write ACL on Windows). Belt-and-braces.
 
 4. **Write a marker** at `HKLM:\SOFTWARE\Omnissa\ShaiHuludPrevent` (Windows) or `/Library/Preferences/com.omnissa.shai_hulud_prevent` (macOS) so the sensor can confirm prevent has run.
 
 ## What the remediate scripts actually do
 
-**Step 1 (highest priority): disable the dead-man's switch.** Unloads and quarantines the `gh-token-monitor` LaunchAgent/scheduled task/service before doing anything else. The malware polls every 60 seconds — if it detects token revocation or its own files being touched while the switch is armed, it attempts `rm -rf ~/`.
+**Step 1 (highest priority): disable the dead-man's switch.** Unloads and quarantines the `gh-token-monitor` and `pgmonitor` / `pgsql-monitor` LaunchAgents, scheduled tasks, services, and systemd user units before doing anything else. The malware polls every 60 seconds — if it detects token revocation or its own files being touched while the switch is armed, it attempts `rm -rf ~/`.
 
-**Step 2: kill running payload processes** (`bun`, anything with `router_runtime`/`router_init`/`tanstack_runner` in cmdline).
+**Step 2: kill running payload processes** (`bun`, anything with `router_runtime` / `router_init` / `tanstack_runner` / `opensearch_init` / `pgmonitor` / `pgsql-monitor` / `roulette.py` / `setup.mjs` / `setup.sh` / `gh-token-monitor` in cmdline).
 
 **Step 3: quarantine** all known payload files from `~/.claude/`, `~/.vscode/`, and per-repo `.claude/`/`.vscode/` directories (depth-limited, capped at 500 dirs). Files are moved to a timestamped folder under `/Library/Application Support/Omnissa/shai_hulud/quarantine/` (macOS) or `C:\ProgramData\Omnissa\shai_hulud\quarantine\` (Windows). Filenames preserve original paths.
 
@@ -178,7 +178,7 @@ The trigger is: *Sensor `devtools_shai_hulud_check` returns a value containing `
 | Payload exfiltrates via GitHub commit-search dead-drop | ❌ | Can't block github.com |
 | Persistence via `.claude/settings.json` | ✅ | Detected (sensor) + quarantined (remediate) |
 | Persistence via `.vscode/tasks.json` | ✅ | Detected + quarantined |
-| `gh-token-monitor` LaunchAgent / scheduled task | ✅ | Detected + disabled first in remediate |
+| `gh-token-monitor` / `pgmonitor` / `pgsql-monitor` LaunchAgent / scheduled task / systemd unit | ✅ | Detected + disabled first in remediate |
 | Worm propagates via stolen npm token | 🟡 | Only if dev's machine is the source; can't stop CI-side propagation |
 | Worm propagates via OIDC token theft from CI | ❌ | Out of scope — needs CI hardening |
 
@@ -198,7 +198,7 @@ The trigger is: *Sensor `devtools_shai_hulud_check` returns a value containing `
 
 6. **Credential rotation is not automated.** Deliberately. Wrong-order rotation can trigger the dead-man's switch. The remediate script disables the switch first and logs everything for the IR team, then humans make the rotation calls.
 
-7. **IOC lists drift.** This repo's IOCs are accurate as of the May 11–12 2026 wave. Subsequent waves will introduce new payload filenames, C2 domains, and persistence paths. See [`docs/iocs.md`](docs/iocs.md) for the current list and update process.
+7. **IOC lists drift.** This repo's IOCs are accurate as of the May 11–13 2026 TanStack wave (CVE-2026-45321). Subsequent waves will introduce new payload filenames, C2 domains, and persistence paths. See [`docs/iocs.md`](docs/iocs.md) for the current list and update process.
 
 ---
 

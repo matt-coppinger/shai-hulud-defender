@@ -70,9 +70,11 @@ while IFS=: read -r username _ uid _ _ home shell; do
     [ ! -d "$home" ] && continue
     case "$home" in /Users/*) ;; *) continue ;; esac
 
-    # Look for any LaunchAgent matching gh-token-monitor pattern
+    # Look for any LaunchAgent matching dead-man's switch patterns
     for plist in "$home/Library/LaunchAgents/"*gh-token-monitor*.plist \
                  "$home/Library/LaunchAgents/com.user.gh-token-monitor.plist" \
+                 "$home/Library/LaunchAgents/"*pgmonitor*.plist \
+                 "$home/Library/LaunchAgents/"*pgsql-monitor*.plist \
                  "$home/Library/LaunchAgents/"*tanstack*.plist; do
         [ ! -f "$plist" ] && continue
         log "Found LaunchAgent: $plist"
@@ -84,10 +86,13 @@ while IFS=: read -r username _ uid _ _ home shell; do
         quarantine_file "$plist"
     done
 
-    # Helper scripts the LaunchAgent invokes
+    # Helper scripts the LaunchAgent invokes (also covers pgmonitor variants)
     for helper in "$home/.local/bin/gh-token-monitor.sh" \
+                  "$home/.local/bin/pgmonitor.py" \
                   "$home/.config/gh-token-monitor/"* \
-                  "$home/.config/systemd/user/gh-token-monitor.service"; do
+                  "$home/.config/systemd/user/gh-token-monitor.service" \
+                  "$home/.config/systemd/user/pgsql-monitor.service" \
+                  "/usr/bin/pgmonitor.py"; do
         [ -e "$helper" ] && quarantine_file "$helper"
     done
 done < <(dscl . -list /Users UniqueID | awk '$2 >= 500 {print $1":x:"$2":20:User:/Users/"$1":/bin/zsh"}')
@@ -95,24 +100,29 @@ done < <(dscl . -list /Users UniqueID | awk '$2 >= 500 {print $1":x:"$2":20:User
 # Kill bun + suspicious node processes (in case daemon is mid-poll)
 log "Step 1b: Kill suspicious processes"
 # pkill returns 0 if it killed anything, 1 if no match. Don't let it fail the script.
-pkill -f 'router_runtime|router_init|tanstack_runner|setup\.mjs|gh-token-monitor' 2>/dev/null && add_action "PROC_KILLED:pattern"
+pkill -f 'router_runtime|router_init|tanstack_runner|opensearch_init|pgmonitor|pgsql-monitor|roulette\.py|setup\.mjs|setup\.sh|gh-token-monitor' 2>/dev/null && add_action "PROC_KILLED:pattern"
 pkill -x bun 2>/dev/null && add_action "PROC_KILLED:bun"
 
 # ---------------------------------------------------------------------------
 # STEP 2: Quarantine payload files from home dirs + project roots
 # ---------------------------------------------------------------------------
 log "Step 2: Quarantine payloads"
-PAYLOAD_FILES="setup.mjs router_runtime.js router_init.js execution.js tanstack_runner.js"
+PAYLOAD_FILES="setup.mjs setup.sh router_runtime.js router_init.js execution.js tanstack_runner.js opensearch_init.js pgmonitor.py roulette.py"
 
 while IFS=: read -r username _ uid _ _ home shell; do
     [ "$uid" -lt 500 ] && continue
     [ ! -d "$home" ] && continue
     case "$home" in /Users/*) ;; *) continue ;; esac
 
-    # 2a: home-level .claude / .vscode
+    # 2a: home-level .claude / .vscode (skip tripwires placed by prevent script)
     for sub in .claude .vscode; do
         for fn in $PAYLOAD_FILES; do
-            quarantine_file "$home/$sub/$fn"
+            target="$home/$sub/$fn"
+            [ ! -f "$target" ] && continue
+            if head -1 "$target" 2>/dev/null | grep -q 'Workspace ONE tripwire'; then
+                continue
+            fi
+            quarantine_file "$target"
         done
     done
 
@@ -129,7 +139,12 @@ while IFS=: read -r username _ uid _ _ home shell; do
             [ "$SCANNED" -ge "$MAX_DIRS" ] && break
             SCANNED=$((SCANNED+1))
             for fn in $PAYLOAD_FILES; do
-                quarantine_file "$marker_dir/$fn"
+                target="$marker_dir/$fn"
+                [ ! -f "$target" ] && continue
+                if head -1 "$target" 2>/dev/null | grep -q 'Workspace ONE tripwire'; then
+                    continue
+                fi
+                quarantine_file "$target"
             done
         done < <(find "$root" -maxdepth 4 \
                        \( -name node_modules -o -name .git \) -prune -o \
@@ -141,7 +156,7 @@ done < <(dscl . -list /Users UniqueID | awk '$2 >= 500 {print $1":x:"$2":20:User
 # STEP 3: Sanitize config files that reference IOCs
 # ---------------------------------------------------------------------------
 log "Step 3: Sanitize config files"
-PAYLOAD_REGEX='router_runtime\.js|router_init\.js|tanstack_runner\.js|execution\.js|voicproducoes|EveryBoiWeBuildIsAWormyBoi|git-tanstack|A Mini Shai-Hulud has Appeared|Shai-Hulud: Here We Go Again|IfYouRevokeThisTokenItWillWipeTheComputerOfTheOwner'
+PAYLOAD_REGEX='router_runtime\.js|router_init\.js|tanstack_runner\.js|execution\.js|opensearch_init\.js|pgmonitor|pgsql-monitor|roulette\.py|voicproducoes|EveryBoiWeBuildIsAWormyBoi|git-tanstack|A Mini Shai-Hulud has Appeared|Shai-Hulud: Here We Go Again|IfYouRevokeThisTokenItWillWipeTheComputerOfTheOwner|PUSH UR T3MPRR|__DAEMONIZED|claude@users\.noreply\.github\.com'
 
 sanitize_config() {
     local path="$1"

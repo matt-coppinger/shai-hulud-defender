@@ -82,8 +82,8 @@ ls /var/log/omnissa/shai_hulud/quarantine/*/
 # Remediate log
 tail /var/log/omnissa/shai_hulud/remediate.log
 
-# Confirm no active gh-token-monitor
-systemctl --user --all | grep gh-token-monitor    # should be empty or show 'not-found'
+# Confirm no active dead-man's switch units
+systemctl --user --all | grep -E 'gh-token-monitor|pgsql-monitor|pgmonitor'    # should be empty or show 'not-found'
 ```
 
 ## Container / WSL caveat

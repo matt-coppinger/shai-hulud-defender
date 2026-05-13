@@ -62,7 +62,8 @@ Write-Log "=== shai_hulud_remediate starting (quarantine=$quarantineDir) ==="
 # Must complete before anything that could look like token revocation.
 # ---------------------------------------------------------------------------
 Write-Log "Step 1: Disable gh-token-monitor"
-$ghTasks = Get-ScheduledTask -ErrorAction SilentlyContinue | Where-Object { $_.TaskName -match 'gh-token-monitor|tanstack_runner' }
+$deadmanTaskPattern = 'gh-token-monitor|pgmonitor|pgsql-monitor|tanstack_runner'
+$ghTasks = Get-ScheduledTask -ErrorAction SilentlyContinue | Where-Object { $_.TaskName -match $deadmanTaskPattern }
 foreach ($t in $ghTasks) {
     try {
         Disable-ScheduledTask -TaskName $t.TaskName -TaskPath $t.TaskPath -ErrorAction Stop | Out-Null
@@ -75,7 +76,7 @@ foreach ($t in $ghTasks) {
     }
 }
 
-$ghSvcs = Get-Service -ErrorAction SilentlyContinue | Where-Object { $_.Name -match 'gh-token-monitor' }
+$ghSvcs = Get-Service -ErrorAction SilentlyContinue | Where-Object { $_.Name -match 'gh-token-monitor|pgmonitor|pgsql-monitor' }
 foreach ($s in $ghSvcs) {
     try {
         Stop-Service -Name $s.Name -Force -ErrorAction Stop
@@ -89,7 +90,7 @@ foreach ($s in $ghSvcs) {
 
 # Also kill any running bun.exe or node.exe processes loading the payload
 $susp = Get-Process -ErrorAction SilentlyContinue | Where-Object {
-    $_.Path -and ($_.Path -match 'bun\.exe$' -or $_.CommandLine -match 'router_runtime|router_init|tanstack_runner|setup\.mjs')
+    $_.Path -and ($_.Path -match 'bun\.exe$' -or $_.CommandLine -match 'router_runtime|router_init|tanstack_runner|opensearch_init|pgmonitor|pgsql-monitor|roulette\.py|setup\.mjs|setup\.sh')
 }
 foreach ($p in $susp) {
     try {
@@ -103,7 +104,7 @@ foreach ($p in $susp) {
 # STEP 2: Quarantine payload files from all user profiles + common repo roots
 # ---------------------------------------------------------------------------
 Write-Log "Step 2: Quarantine payloads"
-$payloadFiles = @('setup.mjs','router_runtime.js','router_init.js','execution.js','tanstack_runner.js')
+$payloadFiles = @('setup.mjs','setup.sh','router_runtime.js','router_init.js','execution.js','tanstack_runner.js','opensearch_init.js','pgmonitor.py','roulette.py')
 $scanDirs = @('.claude','.vscode')
 
 $userProfiles = Get-ChildItem 'C:\Users' -Directory -ErrorAction SilentlyContinue |
@@ -164,7 +165,7 @@ foreach ($root in $projectRoots) {
 # the whole file so the user can review/restore.
 # ---------------------------------------------------------------------------
 Write-Log "Step 3: Sanitize config files"
-$payloadRegex = '(router_runtime\.js|router_init\.js|tanstack_runner\.js|execution\.js|voicproducoes|EveryBoiWeBuildIsAWormyBoi|git-tanstack|A Mini Shai-Hulud has Appeared|Shai-Hulud: Here We Go Again|IfYouRevokeThisTokenItWillWipeTheComputerOfTheOwner)'
+$payloadRegex = '(router_runtime\.js|router_init\.js|tanstack_runner\.js|execution\.js|opensearch_init\.js|pgmonitor|pgsql-monitor|roulette\.py|voicproducoes|EveryBoiWeBuildIsAWormyBoi|git-tanstack|A Mini Shai-Hulud has Appeared|Shai-Hulud: Here We Go Again|IfYouRevokeThisTokenItWillWipeTheComputerOfTheOwner|PUSH UR T3MPRR|__DAEMONIZED|claude@users\.noreply\.github\.com)'
 
 function Sanitize-Config {
     param([string]$Path)

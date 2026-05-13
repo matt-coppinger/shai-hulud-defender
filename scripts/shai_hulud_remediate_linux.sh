@@ -57,40 +57,46 @@ while IFS=: read -r username _ uid _ _ home shell; do
         */nologin|/bin/false|"") continue ;;
     esac
 
-    # Stop and disable user-scope systemd unit. systemctl --user needs to run as the user,
-    # so we use 'runuser' or 'sudo -u' to invoke in their context.
+    # Stop and disable user-scope systemd units (covers gh-token-monitor + pgsql-monitor variants).
+    # systemctl --user needs to run as the user, so we use 'runuser' to invoke in their context.
     if command -v systemctl >/dev/null 2>&1; then
         # Set XDG_RUNTIME_DIR for the user's systemd instance
         export XDG_RUNTIME_DIR="/run/user/$uid"
         if [ -d "$XDG_RUNTIME_DIR" ]; then
-            runuser -u "$username" -- systemctl --user stop gh-token-monitor.service 2>/dev/null && add_action "SYSTEMD_STOPPED:$username"
-            runuser -u "$username" -- systemctl --user disable gh-token-monitor.service 2>/dev/null
+            for unit in gh-token-monitor.service pgsql-monitor.service; do
+                runuser -u "$username" -- systemctl --user stop "$unit" 2>/dev/null && add_action "SYSTEMD_STOPPED:$username:$unit"
+                runuser -u "$username" -- systemctl --user disable "$unit" 2>/dev/null
+            done
             runuser -u "$username" -- systemctl --user daemon-reload 2>/dev/null
-            log "Stopped systemd user unit for $username"
+            log "Stopped systemd user units for $username"
         else
             log "User $username has no active systemd session; will quarantine unit file only"
         fi
     fi
 
-    # Quarantine the unit file and helper scripts
+    # Quarantine unit files and helper scripts (covers all known persistence helpers)
     for path in "$home/.config/systemd/user/gh-token-monitor.service" \
                 "$home/.config/systemd/user/"*gh-token-monitor*.service \
+                "$home/.config/systemd/user/pgsql-monitor.service" \
+                "$home/.config/systemd/user/"*pgsql-monitor*.service \
                 "$home/.local/bin/gh-token-monitor.sh" \
-                "$home/.config/gh-token-monitor"; do
+                "$home/.local/bin/pgmonitor.py" \
+                "$home/.config/gh-token-monitor" \
+                "/usr/bin/pgmonitor.py"; do
         [ -e "$path" ] && quarantine_file "$path"
     done
 done < <(getent passwd)
 
 # Kill any running payload processes
 log "Step 1b: Kill suspicious processes"
-pkill -f 'router_runtime|router_init|tanstack_runner|setup\.mjs|gh-token-monitor' 2>/dev/null && add_action "PROC_KILLED:pattern"
+pkill -f 'router_runtime|router_init|tanstack_runner|opensearch_init|pgmonitor|pgsql-monitor|roulette\.py|setup\.mjs|setup\.sh|gh-token-monitor' 2>/dev/null && add_action "PROC_KILLED:pattern"
 pkill -x bun 2>/dev/null && add_action "PROC_KILLED:bun"
 
 # ---------------------------------------------------------------------------
 # STEP 2: Quarantine payload files
 # ---------------------------------------------------------------------------
 log "Step 2: Quarantine payloads"
-PAYLOAD_FILES="setup.mjs router_runtime.js router_init.js execution.js tanstack_runner.js"
+PAYLOAD_FILES="setup.mjs setup.sh router_runtime.js router_init.js execution.js tanstack_runner.js opensearch_init.js pgmonitor.py roulette.py"
 
 while IFS=: read -r username _ uid _ _ home shell; do
     [ "$uid" -lt 500 ] && continue
@@ -141,7 +147,7 @@ done < <(getent passwd)
 # STEP 3: Sanitize config files referencing IOCs
 # ---------------------------------------------------------------------------
 log "Step 3: Sanitize config files"
-PAYLOAD_REGEX='router_runtime\.js|router_init\.js|tanstack_runner\.js|execution\.js|voicproducoes|EveryBoiWeBuildIsAWormyBoi|git-tanstack|A Mini Shai-Hulud has Appeared|Shai-Hulud: Here We Go Again|IfYouRevokeThisTokenItWillWipeTheComputerOfTheOwner'
+PAYLOAD_REGEX='router_runtime\.js|router_init\.js|tanstack_runner\.js|execution\.js|opensearch_init\.js|pgmonitor|pgsql-monitor|roulette\.py|voicproducoes|EveryBoiWeBuildIsAWormyBoi|git-tanstack|A Mini Shai-Hulud has Appeared|Shai-Hulud: Here We Go Again|IfYouRevokeThisTokenItWillWipeTheComputerOfTheOwner|PUSH UR T3MPRR|__DAEMONIZED|claude@users\.noreply\.github\.com'
 
 sanitize_config() {
     local path="$1"
